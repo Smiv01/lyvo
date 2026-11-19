@@ -157,7 +157,9 @@ app_open('Localisation', 'localisation.php', $user);
 <?php
 ob_start();
 if (!$myCircles): ?>
-  <div class="muted small mt">Pour partager, crée un cercle (Famille, Amis…) ci-dessous et invite tes proches.</div>
+  <div class="muted small mt">Pour partager, crée d'abord un cercle (Famille, Amis…) tout en bas de cette page, puis invite tes proches.</div>
+  <button class="btn btn-primary btn-block mt" type="button" disabled>Activer ma localisation</button>
+  <p class="muted small mt">Ce bouton s'active dès que tu as un cercle.</p>
 <?php else: ?>
   <form method="post" class="mt">
     <?= csrf_field() ?><input type="hidden" name="action" value="share_on">
