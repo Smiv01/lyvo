@@ -249,6 +249,10 @@ p { margin: 0 0 12px; }
 .center { text-align: center; }
 .splash { text-align: center; padding-top: 24px; }
 .splash .logo-name { font-size: 30px; }
+.pitch { list-style: none; margin: 18px 0 4px; padding: 0; display: grid; gap: 12px; text-align: left; }
+.pitch li { display: flex; align-items: center; gap: 12px; font-size: 14px; line-height: 1.35; }
+.pitch img { flex: none; width: 40px; height: 40px; border-radius: 12px; }
+.pitch strong { display: block; }
 .hero { display: grid; place-items: center; margin: 12px 0 18px; }
 .dots { display: flex; justify-content: center; gap: 6px; margin: 14px 0 16px; }
 .dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--dot); display: block; }
