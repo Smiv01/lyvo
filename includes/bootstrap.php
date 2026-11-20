@@ -71,7 +71,7 @@ function cfg($path, $default = null)
 header('X-Frame-Options: DENY');
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: same-origin');
-header("Content-Security-Policy: default-src 'self'; style-src 'self'; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'");
+header("Content-Security-Policy: default-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob:; form-action 'self'; frame-ancestors 'none'");
 
 // --- Chemin de base (fonctionne dans un sous-dossier de WAMP) ------------------
 function base_path()

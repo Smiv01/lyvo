@@ -3,7 +3,7 @@
 // et servies par journee-photo.php après vérification de l'accès.
 require_once __DIR__ . '/media.php';
 
-/** Supprime une journée avec ses photos et tout son contenu. */
+/** Supprime une journée avec ses photos, ses vocaux et tout son contenu. */
 function day_remove($dayId)
 {
     $dayId = (int)$dayId;
@@ -12,6 +12,13 @@ function day_remove($dayId)
     foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $f) {
         @unlink(storage_dir('days') . '/' . basename((string)$f));
     }
+    day_audio_ensure();
+    $stmt = db()->prepare('SELECT a.path FROM day_post_audio a JOIN day_posts p ON p.id = a.post_id WHERE p.day_id = ?');
+    $stmt->execute([$dayId]);
+    foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $f) {
+        @unlink(storage_dir('audio') . '/' . basename((string)$f));
+    }
+    db()->prepare('DELETE FROM day_post_audio WHERE post_id IN (SELECT id FROM day_posts WHERE day_id = ?)')->execute([$dayId]);
     db()->prepare('DELETE FROM day_reactions WHERE post_id IN (SELECT id FROM day_posts WHERE day_id = ?)')->execute([$dayId]);
     db()->prepare('DELETE FROM day_posts WHERE day_id = ?')->execute([$dayId]);
     db()->prepare('DELETE FROM day_members WHERE day_id = ?')->execute([$dayId]);
@@ -155,6 +162,8 @@ function day_memories_html(array $mem, $showTitle)
             }
             if ($p['body'] !== null && $p['body'] !== '') {
                 $html .= '<span class="small">' . e(mb_substr($p['body'], 0, 80)) . '</span>';
+            } elseif (!$p['photo_path']) {
+                $html .= '<span class="small">🎤 Message vocal</span>';
             }
             if ($showTitle) {
                 $html .= '<span class="muted small">' . e($p['kind'] === 'journal' ? 'Ma journée' : $p['title']) . '</span>';
@@ -249,4 +258,91 @@ function save_day_photo($file)
         return [null, "Impossible d'enregistrer la photo."];
     }
     return [$name, null];
+}
+
+// --- Messages vocaux -------------------------------------------------------------
+
+/** Table des vocaux, créée au premier besoin : aucune migration manuelle à lancer sur le serveur. */
+function day_audio_ensure()
+{
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    db()->exec('CREATE TABLE IF NOT EXISTS day_post_audio (
+        post_id     BIGINT UNSIGNED PRIMARY KEY,
+        path        VARCHAR(80) NOT NULL,
+        mime        VARCHAR(20) NOT NULL,
+        secs        SMALLINT UNSIGNED NULL,
+        CONSTRAINT fk_daudio_post FOREIGN KEY (post_id) REFERENCES day_posts (id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci');
+    $done = true;
+}
+
+/** Fichier vocal envoyé avec le formulaire (champ « vocal »), ou null. */
+function day_uploaded_audio()
+{
+    if (!isset($_FILES['vocal']) || !is_array($_FILES['vocal']) || is_array($_FILES['vocal']['name'])) {
+        return null;
+    }
+    return (int)$_FILES['vocal']['error'] === UPLOAD_ERR_NO_FILE ? null : $_FILES['vocal'];
+}
+
+/**
+ * Enregistre un message vocal tel qu'il a été enregistré par le téléphone (WebM/Opus, MP4/AAC ou Ogg).
+ * Le format est vérifié d'après le contenu du fichier, pas d'après son nom. Retourne [nom|null, type|null, erreur|null].
+ */
+function save_day_audio($file)
+{
+    $code = (int)opt($file, 'error', UPLOAD_ERR_NO_FILE);
+    if ($code === UPLOAD_ERR_INI_SIZE || $code === UPLOAD_ERR_FORM_SIZE) {
+        return [null, null, 'Vocal trop long (3 Mo maximum).'];
+    }
+    if ($code !== UPLOAD_ERR_OK || !is_uploaded_file($file['tmp_name'])) {
+        return [null, null, "L'envoi du vocal a échoué. Réessaie."];
+    }
+    if ($file['size'] < 100) {
+        return [null, null, 'Le vocal est vide. Réessaie.'];
+    }
+    if ($file['size'] > 3 * 1024 * 1024) {
+        return [null, null, 'Vocal trop long (3 Mo maximum).'];
+    }
+    $head = (string)@file_get_contents($file['tmp_name'], false, null, 0, 12);
+    if (substr($head, 0, 4) === "\x1A\x45\xDF\xA3") {
+        $mime = 'audio/webm';
+        $ext = 'webm';
+    } elseif (substr($head, 0, 4) === 'OggS') {
+        $mime = 'audio/ogg';
+        $ext = 'ogg';
+    } elseif (substr($head, 4, 4) === 'ftyp') {
+        $mime = 'audio/mp4';
+        $ext = 'm4a';
+    } else {
+        return [null, null, "Ce fichier n'est pas un vocal valide."];
+    }
+    $name = bin2hex(random_bytes(12)) . '.' . $ext;
+    if (!@move_uploaded_file($file['tmp_name'], storage_dir('audio') . '/' . $name)) {
+        return [null, null, "Impossible d'enregistrer le vocal."];
+    }
+    return [$name, $mime, null];
+}
+
+/** Supprime le fichier vocal d'un souvenir (la ligne de la table part avec le souvenir). */
+function day_audio_delete($postId)
+{
+    day_audio_ensure();
+    $stmt = db()->prepare('SELECT path FROM day_post_audio WHERE post_id = ?');
+    $stmt->execute([(int)$postId]);
+    $path = (string)$stmt->fetchColumn();
+    if ($path !== '') {
+        @unlink(storage_dir('audio') . '/' . basename($path));
+    }
+    db()->prepare('DELETE FROM day_post_audio WHERE post_id = ?')->execute([(int)$postId]);
+}
+
+/** Durée lisible d'un vocal : 0:42. */
+function audio_duration($secs)
+{
+    $secs = max(0, (int)$secs);
+    return floor($secs / 60) . ':' . str_pad((string)($secs % 60), 2, '0', STR_PAD_LEFT);
 }

@@ -58,7 +58,7 @@ document.querySelectorAll('[data-copy]').forEach(function (b) {
 
 // Ma Journée : plusieurs photos à la fois, réduites sur le téléphone avant l'envoi (plus rapide, moins de données)
 (function () {
-  var inp = document.querySelector('.compose input[type=file]');
+  var inp = document.querySelector('.compose input[name="photos[]"]');
   var out = document.getElementById('photo-name');
   if (!inp) { return; }
   function shrink(file) {
@@ -95,6 +95,101 @@ document.querySelectorAll('[data-copy]').forEach(function (b) {
       } catch (e) {}
     });
   });
+})();
+
+// Ma Journée : message vocal enregistré sur le téléphone, écouté avant l'envoi, joint au prochain « Publier » (2 min max)
+(function () {
+  var btn = document.getElementById('vocal-btn');
+  var inp = document.getElementById('vocal-file');
+  if (!btn || !inp) { return; }
+  var secsInp = document.getElementById('vocal-secs');
+  var st = document.getElementById('vocal-status');
+  var box = document.getElementById('vocal-box');
+  var prev = document.getElementById('vocal-preview');
+  var cancel = document.getElementById('vocal-cancel');
+  var MAX = 120;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder || !window.DataTransfer) {
+    return; // navigateur trop ancien : le bouton reste caché
+  }
+  btn.hidden = false;
+  var rec = null, chunks = [], stream = null, t0 = 0, timer = null, blobUrl = null;
+  function pickType() {
+    var types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'];
+    for (var i = 0; i < types.length; i++) {
+      if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(types[i])) { return types[i]; }
+    }
+    return '';
+  }
+  function fmt(s) { return Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2); }
+  function stopStream() {
+    if (stream) { stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; }
+  }
+  function clearVocal() {
+    try { inp.files = new DataTransfer().files; } catch (e) { inp.value = ''; }
+    secsInp.value = '';
+    if (blobUrl) { URL.revokeObjectURL(blobUrl); blobUrl = null; }
+    prev.removeAttribute('src');
+    box.hidden = true;
+    btn.textContent = '🎤 Vocal';
+    btn.setAttribute('aria-pressed', 'false');
+  }
+  btn.addEventListener('click', function () {
+    if (rec && rec.state === 'recording') { rec.stop(); return; }
+    clearVocal();
+    st.textContent = 'Autorise le micro si ton téléphone le demande…';
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (s) {
+      stream = s;
+      var type = pickType();
+      try { rec = type ? new MediaRecorder(s, { mimeType: type }) : new MediaRecorder(s); } catch (e) { rec = new MediaRecorder(s); }
+      chunks = [];
+      rec.ondataavailable = function (e) { if (e.data && e.data.size) { chunks.push(e.data); } };
+      rec.onstop = function () {
+        clearInterval(timer);
+        stopStream();
+        var secs = Math.min(MAX, Math.max(1, Math.round((Date.now() - t0) / 1000)));
+        var mime = ((rec && rec.mimeType) || type || 'audio/webm').split(';')[0];
+        rec = null;
+        var blob = new Blob(chunks, { type: mime });
+        btn.setAttribute('aria-pressed', 'false');
+        if (!blob.size) { btn.textContent = '🎤 Vocal'; st.textContent = "Rien n'a été enregistré. Réessaie."; return; }
+        var ext = mime.indexOf('mp4') >= 0 ? 'm4a' : (mime.indexOf('ogg') >= 0 ? 'ogg' : 'webm');
+        try {
+          var dt = new DataTransfer();
+          dt.items.add(new File([blob], 'vocal.' + ext, { type: mime }));
+          inp.files = dt.files;
+        } catch (e) {
+          btn.textContent = '🎤 Vocal';
+          st.textContent = "Ce navigateur ne permet pas d'envoyer un vocal. Essaie avec Chrome ou Safari à jour.";
+          return;
+        }
+        secsInp.value = String(secs);
+        blobUrl = URL.createObjectURL(blob);
+        prev.src = blobUrl;
+        box.hidden = false;
+        btn.textContent = '🎤 Refaire';
+        st.textContent = 'Vocal prêt (' + fmt(secs) + ') : écoute-le, puis appuie sur « Publier ».';
+      };
+      rec.start(1000);
+      t0 = Date.now();
+      btn.textContent = '⏹ Arrêter';
+      btn.setAttribute('aria-pressed', 'true');
+      st.textContent = '🔴 Enregistrement… 0:00 (2 min maximum)';
+      timer = setInterval(function () {
+        var s = Math.round((Date.now() - t0) / 1000);
+        st.textContent = '🔴 Enregistrement… ' + fmt(Math.min(s, MAX)) + ' (2 min maximum)';
+        if (s >= MAX && rec && rec.state === 'recording') { rec.stop(); }
+      }, 500);
+    }).catch(function () {
+      stopStream();
+      st.textContent = 'Micro refusé : autorise le micro pour ce site dans les réglages, puis réessaie.';
+    });
+  });
+  cancel.addEventListener('click', function () { clearVocal(); st.textContent = 'Vocal retiré.'; });
+  if (btn.form) {
+    btn.form.addEventListener('submit', function (e) {
+      if (rec && rec.state === 'recording') { e.preventDefault(); st.textContent = "Arrête d'abord l'enregistrement."; }
+    });
+  }
 })();
 
 // Application installable : service worker + bouton « Installer »

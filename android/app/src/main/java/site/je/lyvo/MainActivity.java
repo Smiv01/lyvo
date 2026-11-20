@@ -10,6 +10,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
 import android.webkit.GeolocationPermissions;
+import android.webkit.PermissionRequest;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
@@ -25,6 +26,7 @@ public class MainActivity extends Activity {
 
     private WebView web;
     private ValueCallback<Uri[]> filePicker;
+    private PermissionRequest pendingMic;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -54,6 +56,31 @@ public class MainActivity extends Activity {
             public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback cb) {
                 askLocationPermission();
                 cb.invoke(origin, true, false);
+            }
+
+            /** Messages vocaux : le micro n'est donné qu'à Lyvo, et seulement après l'accord de l'utilisateur. */
+            @Override
+            public void onPermissionRequest(final PermissionRequest req) {
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        boolean wantsMic = false;
+                        for (String r : req.getResources()) {
+                            if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(r)) wantsMic = true;
+                        }
+                        if (!wantsMic || req.getOrigin() == null || !HOST.equals(req.getOrigin().getHost())) {
+                            req.deny();
+                            return;
+                        }
+                        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                            req.grant(new String[]{PermissionRequest.RESOURCE_AUDIO_CAPTURE});
+                        } else {
+                            if (pendingMic != null) pendingMic.deny();
+                            pendingMic = req;
+                            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, 3);
+                        }
+                    }
+                });
             }
 
             @Override
@@ -86,6 +113,14 @@ public class MainActivity extends Activity {
     public void onRequestPermissionsResult(int req, String[] perms, int[] results) {
         super.onRequestPermissionsResult(req, perms, results);
         if (req == 2 && web != null) web.reload();
+        if (req == 3 && pendingMic != null) {
+            if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) {
+                pendingMic.grant(new String[]{PermissionRequest.RESOURCE_AUDIO_CAPTURE});
+            } else {
+                pendingMic.deny();
+            }
+            pendingMic = null;
+        }
     }
 
     @Override

@@ -606,6 +606,15 @@ a.notif:hover { text-decoration: none; border-color: var(--primary); }
 .compose textarea { width: 100%; resize: vertical; }
 .compose-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 10px; }
 .compose-photo { position: relative; cursor: pointer; }
+.compose-row { flex-wrap: wrap; }
+.vocal-file { display: none; }
+.vocal-box { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.vocal-box[hidden] { display: none; }
+.vocal-box audio, .post-audio audio { flex: 1; width: 100%; min-width: 0; height: 40px; }
+.post-audio { display: grid; gap: 6px; margin-bottom: 10px; }
+.post-audio-label { font-size: 13px; font-weight: 600; }
+#vocal-btn[aria-pressed="true"] { border-color: #d64545; color: #d64545; }
+#vocal-btn[hidden] { display: none; }
 .file-hidden { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
 .feed { display: grid; gap: 12px; }
 .post-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }

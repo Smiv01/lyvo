@@ -351,6 +351,14 @@ CREATE TABLE IF NOT EXISTS day_posts (
     CONSTRAINT fk_daypost_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS day_post_audio (
+    post_id     BIGINT UNSIGNED PRIMARY KEY,
+    path        VARCHAR(80) NOT NULL,
+    mime        VARCHAR(20) NOT NULL,
+    secs        SMALLINT UNSIGNED NULL,
+    CONSTRAINT fk_daudio_post FOREIGN KEY (post_id) REFERENCES day_posts (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS day_reactions (
     id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     post_id     BIGINT UNSIGNED NOT NULL,

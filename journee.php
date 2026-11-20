@@ -45,6 +45,22 @@ if (is_post()) {
             $room = 3000 - (int)$count->fetchColumn();
             $made = 0;
             $errors = [];
+            // Vocal : publié en premier, avec le texte éventuel ; les photos suivent comme d'habitude.
+            $vocal = day_uploaded_audio();
+            if ($vocal !== null) {
+                list($aName, $aMime, $aErr) = save_day_audio($vocal);
+                if ($aErr !== null) {
+                    $errors[] = $aErr;
+                } else {
+                    day_audio_ensure();
+                    $secs = max(1, min(180, (int)opt($_POST, 'vocal_secs', 0)));
+                    db()->prepare('INSERT INTO day_posts (day_id, user_id, body, photo_path, lat, lng, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+                        ->execute([$did, $userId, $body !== '' ? $body : null, null, $hasLoc ? round((float)$pLat, 5) : null, $hasLoc ? round((float)$pLng, 5) : null, now()]);
+                    db()->prepare('INSERT INTO day_post_audio (post_id, path, mime, secs) VALUES (?, ?, ?, ?)')
+                        ->execute([(int)db()->lastInsertId(), $aName, $aMime, $secs]);
+                    $made++;
+                }
+            }
             if (count($files) > 10) {
                 $errors[] = 'Maximum 10 photos à la fois : les suivantes ont été ignorées.';
                 $files = array_slice($files, 0, 10);
@@ -71,7 +87,7 @@ if (is_post()) {
                 $made++;
             }
             if ($made === 0 && !$errors) {
-                $errors[] = 'Écris un message ou choisis une photo.';
+                $errors[] = 'Écris un message, choisis une photo ou enregistre un vocal.';
             }
             if ($errors) {
                 flash('error', implode(' ', array_unique($errors)));
@@ -84,6 +100,7 @@ if (is_post()) {
         $stmt->execute([post_id(), $did]);
         $p = $stmt->fetch();
         if ($p && ($isOwner || (int)$p['user_id'] === $userId)) {
+            day_audio_delete($p['id']);
             db()->prepare('DELETE FROM day_reactions WHERE post_id = ?')->execute([$p['id']]);
             db()->prepare('DELETE FROM day_posts WHERE id = ? AND day_id = ?')->execute([$p['id'], $did]);
             if ($p['photo_path']) {
@@ -158,11 +175,14 @@ $limit = max(20, min(3000, (int)opt($_GET, 'n', 30)));
 $totalStmt = db()->prepare('SELECT COUNT(*) FROM day_posts WHERE day_id = ?');
 $totalStmt->execute([$did]);
 $totalPosts = (int)$totalStmt->fetchColumn();
+day_audio_ensure();
 $stmt = db()->prepare(
     'SELECT p.id, p.user_id, p.body, p.photo_path, p.lat, p.lng, p.created_at, pr.first_name,
+            a.post_id AS audio_id, a.secs AS audio_secs,
             (SELECT COUNT(*) FROM day_reactions r WHERE r.post_id = p.id) AS n_likes,
             (SELECT COUNT(*) FROM day_reactions r WHERE r.post_id = p.id AND r.user_id = ?) AS i_liked
        FROM day_posts p LEFT JOIN profiles pr ON pr.user_id = p.user_id
+       LEFT JOIN day_post_audio a ON a.post_id = p.id
       WHERE p.day_id = ? ORDER BY p.id DESC LIMIT ' . $limit
 );
 $stmt->execute([$userId, $did]);
@@ -216,10 +236,18 @@ app_open($title, 'journees.php', $user);
     <textarea class="input" name="body" rows="2" maxlength="1000" placeholder="Un message, un souvenir…" aria-label="Message"></textarea>
     <div class="compose-row">
       <label class="btn compose-photo">📷 Photos<input class="file-hidden" type="file" name="photos[]" multiple accept="image/jpeg,image/png,image/webp"></label>
+      <button class="btn" type="button" id="vocal-btn" aria-pressed="false" hidden>🎤 Vocal</button>
       <button class="btn" type="button" id="post-locate" aria-pressed="false">📍 Ajouter le lieu</button>
       <button class="btn btn-primary" type="submit">Publier</button>
     </div>
     <input type="hidden" name="lat" id="post-lat"><input type="hidden" name="lng" id="post-lng">
+    <input class="vocal-file" type="file" name="vocal" id="vocal-file" accept="audio/*" tabindex="-1" aria-hidden="true">
+    <input type="hidden" name="vocal_secs" id="vocal-secs">
+    <div class="vocal-box" id="vocal-box" hidden>
+      <audio id="vocal-preview" controls preload="metadata"></audio>
+      <button class="icon-btn" type="button" id="vocal-cancel" aria-label="Retirer le vocal">✕</button>
+    </div>
+    <p class="muted small" id="vocal-status" aria-live="polite"></p>
     <p class="muted small" id="photo-name"></p>
     <p class="muted small" id="post-loc-status" aria-live="polite"></p>
   </form>
@@ -242,6 +270,12 @@ app_open($title, 'journees.php', $user);
           <?php endif; ?>
         </div>
         <?php if ($p['photo_path']): ?><img class="post-photo" src="<?= e(url('journee-photo.php?id=' . (int)$p['id'])) ?>" alt="Photo de <?= e($p['first_name'] ?: 'la journée') ?>" loading="lazy"><?php endif; ?>
+        <?php if ($p['audio_id'] !== null): ?>
+          <div class="post-audio">
+            <span class="post-audio-label">🎤 Vocal · <?= e(audio_duration($p['audio_secs'])) ?></span>
+            <audio controls preload="none" src="<?= e(url('journee-audio.php?id=' . (int)$p['id'])) ?>">Ton navigateur ne peut pas lire ce vocal.</audio>
+          </div>
+        <?php endif; ?>
         <?php if ($p['lat'] !== null && $p['lng'] !== null): ?><p class="small"><a target="_blank" rel="noopener" href="<?= e('https://www.openstreetmap.org/?mlat=' . $p['lat'] . '&mlon=' . $p['lng'] . '#map=16/' . $p['lat'] . '/' . $p['lng']) ?>">📍 Voir le lieu</a></p><?php endif; ?>
         <?php if ($p['body'] !== null && $p['body'] !== ''): ?><p class="post-body"><?= nl2br(e($p['body'])) ?></p><?php endif; ?>
         <form method="post" class="inline">
