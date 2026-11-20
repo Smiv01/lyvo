@@ -18,7 +18,7 @@ Thème clair / sombre (automatique selon le téléphone). Aucune bibliothèque e
 
 ## Mettre à jour la base
 
-Après une mise à jour du code, ouvre **http://localhost/mon-espace/install.php** : les tables manquantes sont créées, les données existantes ne sont pas touchées.
+Après une mise à jour du code, ouvre **http://localhost/lyvo/install.php** : les tables manquantes sont créées, les données existantes ne sont pas touchées.
 
 ---
 
@@ -29,9 +29,9 @@ Fondation de l'application : comptes sécurisés, profil, appareils connectés, 
 ## Lancer en local avec WAMP
 
 1. Démarre WAMP et attends l'icône **verte**.
-2. Le projet doit être dans `C:\wamp\www\mon-espace`.
-3. Ouvre **http://localhost/mon-espace/install.php** et clique sur « Installer la base » (crée la base `mon_espace` et ses tables).
-4. Ouvre **http://localhost/mon-espace/**.
+2. Le projet doit être dans `C:\wamp\www\lyvo`.
+3. Ouvre **http://localhost/lyvo/install.php** et clique sur « Installer la base » (crée la base `mon_espace` et ses tables).
+4. Ouvre **http://localhost/lyvo/**.
 
 Réglages MySQL par défaut de WAMP : utilisateur `root`, sans mot de passe. Si le tien est différent, modifie `config/config.php`.
 
@@ -39,7 +39,7 @@ Dans WAMP, ton dossier peut être `C:\wamp64\www` ou `C:\wamp\www` : l'adresse r
 
 ## E-mails en développement
 
-Aucun e-mail réel n'est envoyé. Les codes de vérification et les liens de récupération s'affichent sur **http://localhost/mon-espace/dev-mails.php**. En passant `env` à `prod` dans la config, `install.php` et `dev-mails.php` sont désactivés ; il faudra alors brancher un vrai service d'envoi dans `send_mail()` (`includes/bootstrap.php`).
+Aucun e-mail réel n'est envoyé. Les codes de vérification et les liens de récupération s'affichent sur **http://localhost/lyvo/dev-mails.php**. En passant `env` à `prod` dans la config, `install.php` et `dev-mails.php` sont désactivés ; il faudra alors brancher un vrai service d'envoi dans `send_mail()` (`includes/bootstrap.php`).
 
 ## Parcours à tester
 

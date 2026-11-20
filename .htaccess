@@ -1,2 +1,16 @@
 Options -Indexes
 DirectoryIndex index.php
+
+# Site en ligne : toujours en HTTPS (les copies locales ne sont pas concernées).
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{HTTP_HOST} ^lyvo\.site\.je$ [NC]
+  RewriteCond %{HTTPS} off
+  RewriteCond %{HTTP:X-Forwarded-Proto} !https
+  RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+</IfModule>
+
+# Fichiers de travail jamais servis au public : documentation, archives, configuration, fichiers cachés.
+<FilesMatch "(^\.|\.(md|zip|json|mjs|ts|sql|log|bak)$)">
+  Require all denied
+</FilesMatch>
